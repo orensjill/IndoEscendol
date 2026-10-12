@@ -59,7 +59,9 @@ class Samehadaku : MainAPI() {
         "$mainUrl/daftar-anime-2/" to "Daftar Anime"
     )
 
-    private fun extractResults(document: Document): List<AnimeSearchResponse> {
+    private fun extractResults(
+        document: Document
+    ): List<AnimeSearchResponse> {
         val selectors = listOf(
             ".post-show ul li",
             ".post-show li",
@@ -81,7 +83,6 @@ class Samehadaku : MainAPI() {
             if (results.isNotEmpty()) return results
         }
 
-        // Fallback: baca tautan kartu langsung jika class situs berubah.
         return document.select("a[href]")
             .filter { anchor ->
                 val href = anchor.absUrl("href")
@@ -90,7 +91,10 @@ class Samehadaku : MainAPI() {
                     append(" ")
                     append(anchor.attr("title"))
                     append(" ")
-                    append(anchor.selectFirst("img")?.attr("alt").orEmpty())
+                    append(
+                        anchor.selectFirst("img")
+                            ?.attr("alt").orEmpty()
+                    )
                 }.trim()
 
                 val validHost = href.startsWith(mainUrl, true)
@@ -102,9 +106,11 @@ class Samehadaku : MainAPI() {
                 validHost &&
                     !excluded &&
                     text.isNotBlank() &&
-                    (text.contains("episode", true) ||
-                     text.contains("subtitle indonesia", true) ||
-                     anchor.selectFirst("img") != null)
+                    (
+                        text.contains("episode", true) ||
+                        text.contains("subtitle indonesia", true) ||
+                        anchor.selectFirst("img") != null
+                    )
             }
             .mapNotNull { it.toSearchResult() }
             .distinctBy { it.url }
@@ -141,7 +147,8 @@ class Samehadaku : MainAPI() {
 
                 val results = block.select(
                     ".animepost, .bs, article, .uta, .utao"
-                ).mapNotNull { it.toSearchResult() }
+                )
+                    .mapNotNull { it.toSearchResult() }
                     .distinctBy { it.url }
 
                 if (results.isNotEmpty()) {
@@ -162,11 +169,7 @@ class Samehadaku : MainAPI() {
             }
 
             items.add(
-                HomePageList(
-                    request.name,
-                    results,
-                    true
-                )
+                HomePageList(request.name, results, true)
             )
         }
 
@@ -200,7 +203,8 @@ class Samehadaku : MainAPI() {
             .ifBlank { anchor.text() }
             .ifBlank { image?.attr("alt").orEmpty() }
             .ifBlank {
-                selectFirst("h2, h3, .tt, .title")?.text().orEmpty()
+                selectFirst("h2, h3, .tt, .title")
+                    ?.text().orEmpty()
             }
             .trim()
 
@@ -224,12 +228,10 @@ class Samehadaku : MainAPI() {
 
         val cleanTitle = rawTitle
             .replace(
-                Regex("""(?i)\bepisode\s*\d+.*$"""),
-                ""
+                Regex("""(?i)\bepisode\s*\d+.*$"""), ""
             )
             .replace(
-                Regex("""(?i)\bep\.?\s*\d+.*$"""),
-                ""
+                Regex("""(?i)\bep\.?\s*\d+.*$"""), ""
             )
             .replace(
                 Regex("""(?i)\b(subtitle indonesia|nonton anime)\b"""),
@@ -247,12 +249,13 @@ class Samehadaku : MainAPI() {
         }
     }
 
-    override suspend fun search(query: String): List<SearchResponse> {
+    override suspend fun search(
+        query: String
+    ): List<SearchResponse> {
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
         val document = app.get("$mainUrl/?s=$encodedQuery").document
 
-        return extractResults(document)
-            .distinctBy { it.url }
+        return extractResults(document).distinctBy { it.url }
     }
 
     override suspend fun load(url: String): LoadResponse? {
@@ -285,17 +288,8 @@ class Samehadaku : MainAPI() {
         val year = Regex("""\b(?:19|20)\d{2}\b""")
             .find(infoText)?.value?.toIntOrNull()
 
-        val statusText = document.select(
-            ".spe, .info, .infox, .seriestu"
-        ).text()
-
-        val status = getStatus(statusText)
-
-        val typeText = document.select(
-            ".spe, .info, .infox, .seriestu"
-        ).text()
-
-        val type = getType(typeText)
+        val status = getStatus(infoText)
+        val type = getType(infoText)
 
         val rating = document.selectFirst(
             ".ratingValue, .numscore, .rating"
@@ -387,38 +381,54 @@ class Samehadaku : MainAPI() {
     ): Boolean {
         val document = app.get(data).document
 
-        val links = document.select(
-            "#downloadb li a, #downloadb a, " +
-                ".download a, .soraurlx a, " +
-                ".player-embed iframe, .player-embed a, " +
-                ".player iframe, .player a"
+        val selectors = listOf(
+            "#downloadb a",
+            "#downloadb li a",
+            ".download a",
+            ".soraurlx a",
+            ".player-embed iframe",
+            ".player-embed a",
+            ".player iframe",
+            ".player a",
+            "#player iframe",
+            "#pembed iframe",
+            ".pembed iframe",
+            ".video-content iframe",
+            ".responsive-embed iframe",
+            "iframe[src]",
+            "iframe[data-src]",
+            "iframe[data-lazy-src]"
         )
 
-        for (element in links) {
-            val rawUrl = when (element.tagName()) {
-                "iframe" -> element.attr("src")
-                else -> element.attr("href")
-                    .ifBlank { element.attr("src") }
+        val candidates = document.select(
+            selectors.joinToString(", ")
+        ).mapNotNull { element ->
+            val rawUrl = element.attr("src")
+                .ifBlank { element.attr("data-src") }
+                .ifBlank { element.attr("data-lazy-src") }
+                .ifBlank { element.attr("data-embed") }
+                .ifBlank { element.attr("href") }
+
+            fixUrlNull(rawUrl)
+                ?.takeIf { it.startsWith("http", true) }
+        }.distinct()
+
+        if (candidates.isEmpty()) {
+            return false
+        }
+
+        for (linkUrl in candidates) {
+            try {
+                loadFixedExtractor(
+                    linkUrl,
+                    "Unknown",
+                    data,
+                    subtitleCallback,
+                    callback
+                )
+            } catch (_: Exception) {
+                // Teruskan ke kandidat tautan berikutnya.
             }
-
-            val linkUrl = fixUrlNull(rawUrl)
-                ?: continue
-
-            if (!linkUrl.startsWith("http", true)) continue
-
-            val quality = element.closest("li")
-                ?.selectFirst("strong, b")
-                ?.text()
-                .orEmpty()
-                .ifBlank { "Unknown" }
-
-            loadFixedExtractor(
-                linkUrl,
-                quality,
-                "$mainUrl/",
-                subtitleCallback,
-                callback
-            )
         }
 
         return true
@@ -459,12 +469,19 @@ class Samehadaku : MainAPI() {
 
         return when {
             value.contains("4K") ||
-                value.contains("2160") -> Qualities.P2160.value
+                value.contains("2160") ->
+                Qualities.P2160.value
+
             value.contains("FULLHD") ||
-                value.contains("1080") -> Qualities.P1080.value
-            value.contains("720") ||
-                value == "HD" -> Qualities.P720.value
-            value.contains("480") -> Qualities.P480.value
+                value.contains("1080") ->
+                Qualities.P1080.value
+
+            value.contains("720") || value == "HD" ->
+                Qualities.P720.value
+
+            value.contains("480") ->
+                Qualities.P480.value
+
             else -> filter { it.isDigit() }
                 .toIntOrNull() ?: Qualities.Unknown.value
         }
