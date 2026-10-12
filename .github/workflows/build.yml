@@ -1,4 +1,4 @@
-
+```yaml
 name: Build Samehadaku
 
 concurrency:
@@ -51,15 +51,15 @@ jobs:
           touch local.properties
           printf 'SAMEHADAKU_API=%s\n' "$SAMEHADAKU_API" >> local.properties
 
-      - name: Build Samehadaku and plugin list
+      - name: Build Samehadaku
         run: |
           chmod +x gradlew
-          ./gradlew :Samehadaku:make makePluginsJson \
+          ./gradlew :Samehadaku:make \
             -x lint \
             --stacktrace \
             --console=plain
 
-      - name: Prepare repository files
+      - name: Prepare plugin repository
         shell: bash
         run: |
           set -e
@@ -68,26 +68,37 @@ jobs:
           find Samehadaku/build -type f -name '*.cs3' \
             -exec cp -v {} output/ \;
 
-          PLUGINS_JSON="$(find build -type f -name 'plugins.json' -print -quit)"
-
-          if [ -z "$PLUGINS_JSON" ]; then
-            echo "::error::plugins.json was not generated."
+          if ! find output -maxdepth 1 -type f -name '*.cs3' | grep -q .; then
+            echo "::error::File .cs3 tidak ditemukan."
             exit 1
           fi
 
-          jq '[.[] | select((.name // "" | ascii_downcase) == "samehadaku")]' \
-            "$PLUGINS_JSON" > output/plugins.json
+          PLUGIN_FILE="$(find output -maxdepth 1 -type f -name '*.cs3' -printf '%f\n' | head -n 1)"
 
-          if [ "$(jq 'length' output/plugins.json)" -eq 0 ]; then
-            echo "::error::Samehadaku metadata was not found in plugins.json."
-            cat "$PLUGINS_JSON"
-            exit 1
-          fi
+          cat > output/plugins.json <<EOF
+          [
+            {
+              "iconUrl": "https://samehadaku.li/favicon.ico",
+              "apiVersion": 1,
+              "repositoryUrl": "https://github.com/orensjill/IndoEscendol",
+              "fileSize": 0,
+              "status": 1,
+              "language": "id",
+              "authors": ["orensjill"],
+              "tvTypes": ["Anime", "AnimeMovie", "OVA"],
+              "version": 23,
+              "internalName": "Samehadaku",
+              "name": "Samehadaku",
+              "description": "Plugin Samehadaku Indonesia",
+              "url": "https://raw.githubusercontent.com/orensjill/IndoEscendol/builds/$PLUGIN_FILE"
+            }
+          ]
+          EOF
 
           cat > output/repo.json <<'EOF'
           {
-            "name": "IndoEscendol Repository",
-            "description": "Repositori plugin CloudStream Indonesia",
+            "name": "IndoEscendol",
+            "description": "Repositori plugin CloudStream",
             "manifestVersion": 1,
             "pluginLists": [
               "https://raw.githubusercontent.com/orensjill/IndoEscendol/builds/plugins.json"
@@ -95,16 +106,12 @@ jobs:
           }
           EOF
 
-          echo "=== Files to publish ==="
+          echo "=== File yang akan dipublikasikan ==="
           ls -lah output
+          cat output/repo.json
           cat output/plugins.json
 
-          if ! find output -maxdepth 1 -type f -name '*.cs3' | grep -q .; then
-            echo "::error::Samehadaku .cs3 file was not generated."
-            exit 1
-          fi
-
-      - name: Upload Samehadaku artifact
+      - name: Upload plugin artifact
         uses: actions/upload-artifact@v4
         with:
           name: samehadaku-plugin
@@ -112,7 +119,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Publish CloudStream repository
+      - name: Publish repository to builds branch
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
