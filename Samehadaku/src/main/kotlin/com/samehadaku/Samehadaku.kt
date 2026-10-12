@@ -19,7 +19,7 @@ import java.net.URLEncoder
 
 class Samehadaku : MainAPI() {
 
-    override var mainUrl = "https://samehadaku.li"
+    override var mainUrl = "https://v2.samehadaku.how"
     override var name = "Samehadaku"
     override val hasMainPage = true
     override var lang = "id"
