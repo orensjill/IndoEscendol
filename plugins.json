@@ -1,0 +1,17 @@
+[
+  {
+    "iconUrl": "https://samehadaku.li/favicon.ico",
+    "apiVersion": 1,
+    "repositoryUrl": "https://github.com/orensjill/IndoEscendol",
+    "fileSize": 0,
+    "status": 1,
+    "language": "id",
+    "authors": ["orensjill"],
+    "tvTypes": ["Anime", "AnimeMovie", "OVA"],
+    "version": 23,
+    "internalName": "Samehadaku",
+    "name": "Samehadaku",
+    "description": "Plugin Samehadaku Indonesia",
+    "url": "https://raw.githubusercontent.com/orensjill/IndoEscendol/builds/Samehadaku.cs3"
+  }
+]

@@ -1,0 +1,8 @@
+{
+  "name": "IndoEscendol",
+  "description": "Repositori plugin CloudStream",
+  "manifestVersion": 1,
+  "pluginLists": [
+    "https://raw.githubusercontent.com/orensjill/IndoEscendol/builds/plugins.json"
+  ]
+}
