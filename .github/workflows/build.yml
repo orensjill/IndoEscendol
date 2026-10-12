@@ -1,3 +1,4 @@
+```yaml
 name: Build Samehadaku
 
 concurrency:
@@ -19,7 +20,7 @@ on:
       - 'gradle.properties'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -50,24 +51,53 @@ jobs:
           touch local.properties
           printf 'SAMEHADAKU_API=%s\n' "$SAMEHADAKU_API" >> local.properties
 
-      - name: Build Samehadaku
+      - name: Build Samehadaku and plugin list
         run: |
           chmod +x gradlew
-          ./gradlew :Samehadaku:make \
+          ./gradlew :Samehadaku:make makePluginsJson \
             -x lint \
             --stacktrace \
             --console=plain
 
-      - name: Collect Samehadaku plugin
+      - name: Prepare repository files
         shell: bash
         run: |
+          set -e
           mkdir -p output
 
           find Samehadaku/build -type f -name '*.cs3' \
             -exec cp -v {} output/ \;
 
-          echo "=== Samehadaku build output ==="
+          PLUGINS_JSON="$(find build -type f -name 'plugins.json' -print -quit)"
+
+          if [ -z "$PLUGINS_JSON" ]; then
+            echo "::error::plugins.json was not generated."
+            exit 1
+          fi
+
+          jq '[.[] | select((.name // "" | ascii_downcase) == "samehadaku")]' \
+            "$PLUGINS_JSON" > output/plugins.json
+
+          if [ "$(jq 'length' output/plugins.json)" -eq 0 ]; then
+            echo "::error::Samehadaku metadata was not found in plugins.json."
+            cat "$PLUGINS_JSON"
+            exit 1
+          fi
+
+          cat > output/repo.json <<'EOF'
+          {
+            "name": "IndoEscendol Repository",
+            "description": "Repositori plugin CloudStream Indonesia",
+            "manifestVersion": 1,
+            "pluginLists": [
+              "https://raw.githubusercontent.com/orensjill/IndoEscendol/builds/plugins.json"
+            ]
+          }
+          EOF
+
+          echo "=== Files to publish ==="
           ls -lah output
+          cat output/plugins.json
 
           if ! find output -maxdepth 1 -type f -name '*.cs3' | grep -q .; then
             echo "::error::Samehadaku .cs3 file was not generated."
@@ -78,6 +108,15 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: samehadaku-plugin
-          path: output/*.cs3
+          path: output/*
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish CloudStream repository
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: builds
+          publish_dir: output
+          force_orphan: true
+```
