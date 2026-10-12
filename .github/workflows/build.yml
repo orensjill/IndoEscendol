@@ -39,6 +39,8 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
 
       - name: Create local.properties
         env:
@@ -54,6 +56,7 @@ jobs:
           PENCURIMOVIE_API: ${{ secrets.PENCURIMOVIE_API }}
           SAMEHADAKU_API: ${{ secrets.SAMEHADAKU_API }}
           USEETV_API: ${{ secrets.USEETV_API }}
+        shell: bash
         run: |
           touch local.properties
           for key in ANIMASU_API DUBBINDO_API GOMOV_API IDLIX_API KURAMANIME_API LAYARKACA_API NIMEGAMI_API OPLOVERZ_API OTAKUDESU_API PENCURIMOVIE_API SAMEHADAKU_API USEETV_API; do
